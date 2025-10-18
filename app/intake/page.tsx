@@ -4,17 +4,30 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/browser"
 import { useUser } from "@/lib/supabase/client-hooks"
+import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Loader2, CheckCircle2, AlertCircle } from "lucide-react"
+
+type ProcessingStep = "idle" | "creating-system" | "saving-intake" | "generating" | "complete" | "error"
 
 export default function IntakePage() {
   const { user, loading: userLoading } = useUser()
   const router = useRouter()
+
+  // Form fields
   const [systemName, setSystemName] = useState("")
-  const [impactLevel, setImpactLevel] = useState("low")
-  const [systemId, setSystemId] = useState<string | null>(null)
-  const [intakeData, setIntakeData] = useState("")
-  const [runId, setRunId] = useState<string | null>(null)
-  const [message, setMessage] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [impactLevel, setImpactLevel] = useState("")
+  const [hasMFA, setHasMFA] = useState(false)
+  const [accessReviewFrequency, setAccessReviewFrequency] = useState("")
+  const [hasEncryptionAtRest, setHasEncryptionAtRest] = useState(false)
+
+  // Processing state
+  const [processingStep, setProcessingStep] = useState<ProcessingStep>("idle")
+  const [errorMessage, setErrorMessage] = useState("")
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -29,29 +42,24 @@ export default function IntakePage() {
     router.push("/")
   }
 
-  if (userLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-600">Loading...</p>
-      </div>
-    )
+  const isFormValid = () => {
+    return systemName.trim() !== "" && impactLevel !== "" && accessReviewFrequency !== ""
   }
 
-  if (!user) {
-    return null
-  }
-
-  const handleCreateSystem = async () => {
-    if (!systemName) {
-      setMessage("Please enter a system name")
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!isFormValid()) {
+      setErrorMessage("Please fill out all required fields")
       return
     }
 
-    setLoading(true)
-    setMessage("")
+    setErrorMessage("")
 
     try {
-      const response = await fetch("/api/system", {
+      // Step 1: Create System
+      setProcessingStep("creating-system")
+      const systemResponse = await fetch("/api/system", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -60,72 +68,36 @@ export default function IntakePage() {
         }),
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setMessage(`Error: ${data.error}`)
-        return
+      if (!systemResponse.ok) {
+        const error = await systemResponse.json()
+        throw new Error(error.error || "Failed to create system")
       }
 
-      setSystemId(data.id)
-      setMessage(`System created! ID: ${data.id}`)
-    } catch (error) {
-      setMessage(`Error: ${error instanceof Error ? error.message : "Unknown error"}`)
-    } finally {
-      setLoading(false)
-    }
-  }
+      const { id: systemId } = await systemResponse.json()
 
-  const handleSaveIntake = async () => {
-    if (!systemId) {
-      setMessage("Please create a system first")
-      return
-    }
-
-    if (!intakeData) {
-      setMessage("Please enter some intake data")
-      return
-    }
-
-    setLoading(true)
-    setMessage("")
-
-    try {
-      const response = await fetch("/api/intake", {
+      // Step 2: Save Intake Data
+      setProcessingStep("saving-intake")
+      const intakeResponse = await fetch("/api/intake", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           system_id: systemId,
-          json: JSON.parse(intakeData),
+          json: {
+            mfa: hasMFA,
+            accessReviewFrequency,
+            encryptionAtRest: hasEncryptionAtRest,
+          },
         }),
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setMessage(`Error: ${data.error}`)
-        return
+      if (!intakeResponse.ok) {
+        const error = await intakeResponse.json()
+        throw new Error(error.error || "Failed to save intake data")
       }
 
-      setMessage("Intake data saved successfully!")
-    } catch (error) {
-      setMessage(`Error: ${error instanceof Error ? error.message : "Unknown error"}`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleGenerate = async () => {
-    if (!systemId) {
-      setMessage("Please create a system first")
-      return
-    }
-
-    setLoading(true)
-    setMessage("")
-
-    try {
-      const response = await fetch("/api/generate", {
+      // Step 3: Generate SSP
+      setProcessingStep("generating")
+      const generateResponse = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -133,138 +105,247 @@ export default function IntakePage() {
         }),
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setMessage(`Error: ${data.error}`)
-        return
+      if (!generateResponse.ok) {
+        const error = await generateResponse.json()
+        throw new Error(error.error || "Failed to generate SSP")
       }
 
-      setRunId(data.run_id)
-      setMessage(`Generation complete! Run ID: ${data.run_id}`)
+      const { run_id } = await generateResponse.json()
+
+      // Step 4: Complete and redirect
+      setProcessingStep("complete")
+      
+      // Redirect to results page after a brief success message
+      setTimeout(() => {
+        router.push(`/results?run_id=${run_id}`)
+      }, 1000)
+
     } catch (error) {
-      setMessage(`Error: ${error instanceof Error ? error.message : "Unknown error"}`)
-    } finally {
-      setLoading(false)
+      setProcessingStep("error")
+      setErrorMessage(error instanceof Error ? error.message : "An unexpected error occurred")
     }
   }
+
+  if (userLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return null
+  }
+
+  const isProcessing = processingStep !== "idle" && processingStep !== "error"
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-2xl mx-auto">
-        <div className="flex justify-between items-start mb-8">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Kamstif API Test</h1>
-            <p className="text-gray-600">Test the Supabase backend integration</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-gray-600 mb-2">
-              Logged in as: <strong>{user.email}</strong>
-            </p>
-            <button
-              onClick={handleLogout}
-              className="text-sm text-red-600 hover:text-red-700 underline"
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-
-        {/* Create System */}
-        <div className="bg-white p-6 rounded-lg shadow mb-6">
-          <h2 className="text-xl font-semibold mb-4">1. Create System</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">System Name</label>
-              <input
-                type="text"
-                value={systemName}
-                onChange={(e) => setSystemName(e.target.value)}
-                className="w-full border border-gray-300 rounded px-3 py-2"
-                placeholder="e.g., Customer Portal"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Impact Level</label>
-              <select
-                value={impactLevel}
-                onChange={(e) => setImpactLevel(e.target.value)}
-                className="w-full border border-gray-300 rounded px-3 py-2"
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border bg-card">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-light tracking-tight">
+              <span className="font-serif">Kamstif</span>
+            </h1>
+            <div className="text-right">
+              <p className="text-sm text-muted-foreground mb-1">
+                {user.email}
+              </p>
+              <button
+                onClick={handleLogout}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
               >
-                <option value="low">Low</option>
-                <option value="moderate">Moderate</option>
-                <option value="high">High</option>
-              </select>
+                Sign out
+              </button>
             </div>
-            <button
-              onClick={handleCreateSystem}
-              disabled={loading}
-              className="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? "Creating..." : "Create System"}
-            </button>
           </div>
         </div>
+      </header>
 
-        {/* Save Intake */}
-        <div className="bg-white p-6 rounded-lg shadow mb-6">
-          <h2 className="text-xl font-semibold mb-4">2. Save Intake Data</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Intake JSON (must be valid JSON)
-              </label>
-              <textarea
-                value={intakeData}
-                onChange={(e) => setIntakeData(e.target.value)}
-                className="w-full border border-gray-300 rounded px-3 py-2 h-32 font-mono text-sm"
-                placeholder='{"mfa": true, "rbac": true}'
-              />
+      {/* Main Content */}
+      <div className="container mx-auto px-6 py-12 max-w-3xl">
+        <div className="mb-8">
+          <h2 className="text-3xl font-semibold text-foreground mb-2">
+            FedRAMP Compliance Questionnaire
+          </h2>
+          <p className="text-muted-foreground leading-relaxed">
+            Answer a few questions to generate your System Security Plan (SSP) automatically.
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* System Information */}
+          <Card className="p-6 space-y-6">
+            <h3 className="text-lg font-semibold text-foreground">System Information</h3>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="system-name">
+                  System Name <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="system-name"
+                  value={systemName}
+                  onChange={(e) => setSystemName(e.target.value)}
+                  placeholder="e.g., Customer Portal"
+                  disabled={isProcessing}
+                  className="h-11"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="impact-level">
+                  FIPS 199 Impact Level <span className="text-destructive">*</span>
+                </Label>
+                <Select value={impactLevel} onValueChange={setImpactLevel} disabled={isProcessing}>
+                  <SelectTrigger id="impact-level" className="h-11">
+                    <SelectValue placeholder="Select impact level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="moderate">Moderate</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <button
-              onClick={handleSaveIntake}
-              disabled={loading || !systemId}
-              className="w-full bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+          </Card>
+
+          {/* Security Controls */}
+          <Card className="p-6 space-y-6">
+            <h3 className="text-lg font-semibold text-foreground">Security Controls</h3>
+            
+            <div className="space-y-6">
+              {/* Question 1: MFA */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="mfa" className="text-base">
+                    Multi-Factor Authentication (MFA)
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Does your system require MFA for all users?
+                  </p>
+                </div>
+                <Switch
+                  id="mfa"
+                  checked={hasMFA}
+                  onCheckedChange={setHasMFA}
+                  disabled={isProcessing}
+                />
+              </div>
+
+              {/* Question 2: Access Review */}
+              <div className="space-y-2">
+                <Label htmlFor="access-review">
+                  Access Review Frequency <span className="text-destructive">*</span>
+                </Label>
+                <p className="text-sm text-muted-foreground mb-2">
+                  How often do you review user access privileges?
+                </p>
+                <Select 
+                  value={accessReviewFrequency} 
+                  onValueChange={setAccessReviewFrequency}
+                  disabled={isProcessing}
+                >
+                  <SelectTrigger id="access-review" className="h-11">
+                    <SelectValue placeholder="Select frequency" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="quarterly">Quarterly</SelectItem>
+                    <SelectItem value="annually">Annually</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Question 3: Encryption */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="encryption" className="text-base">
+                    Data Encryption at Rest
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Is sensitive data encrypted when stored?
+                  </p>
+                </div>
+                <Switch
+                  id="encryption"
+                  checked={hasEncryptionAtRest}
+                  onCheckedChange={setHasEncryptionAtRest}
+                  disabled={isProcessing}
+                />
+              </div>
+            </div>
+          </Card>
+
+          {/* Processing Status */}
+          {isProcessing && (
+            <Card className="p-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  {processingStep === "creating-system" && (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      <p className="text-sm font-medium">Creating system...</p>
+                    </>
+                  )}
+                  {processingStep === "saving-intake" && (
+                    <>
+                      <CheckCircle2 className="h-5 w-5 text-success" />
+                      <p className="text-sm font-medium">System created! Saving intake data...</p>
+                    </>
+                  )}
+                  {processingStep === "generating" && (
+                    <>
+                      <CheckCircle2 className="h-5 w-5 text-success" />
+                      <p className="text-sm font-medium">Generating SSP with AI... This may take a minute.</p>
+                    </>
+                  )}
+                  {processingStep === "complete" && (
+                    <>
+                      <CheckCircle2 className="h-5 w-5 text-success" />
+                      <p className="text-sm font-medium">Complete! Redirecting to results...</p>
+                    </>
+                  )}
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Error Message */}
+          {processingStep === "error" && errorMessage && (
+            <Card className="p-6 border-destructive">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-destructive">Error</p>
+                  <p className="text-sm text-muted-foreground mt-1">{errorMessage}</p>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Submit Button */}
+          <div className="flex justify-end pt-4">
+            <Button
+              type="submit"
+              size="lg"
+              disabled={!isFormValid() || isProcessing}
+              className="gradient-primary text-white shadow-md hover:shadow-lg transition-all h-12 px-8 text-base font-medium"
             >
-              {loading ? "Saving..." : "Save Intake"}
-            </button>
+              {isProcessing ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                "Generate SSP"
+              )}
+            </Button>
           </div>
-        </div>
-
-        {/* Generate */}
-        <div className="bg-white p-6 rounded-lg shadow mb-6">
-          <h2 className="text-xl font-semibold mb-4">3. Generate (Stub)</h2>
-          <button
-            onClick={handleGenerate}
-            disabled={loading || !systemId}
-            className="w-full bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 disabled:opacity-50"
-          >
-            {loading ? "Generating..." : "Generate"}
-          </button>
-        </div>
-
-        {/* Status Display */}
-        {systemId && (
-          <div className="bg-blue-50 p-4 rounded-lg mb-4">
-            <p className="text-sm font-medium">Current System ID: {systemId}</p>
-          </div>
-        )}
-
-        {runId && (
-          <div className="bg-purple-50 p-4 rounded-lg mb-4">
-            <p className="text-sm font-medium">Latest Run ID: {runId}</p>
-          </div>
-        )}
-
-        {message && (
-          <div
-            className={`p-4 rounded-lg ${
-              message.startsWith("Error") ? "bg-red-50 text-red-800" : "bg-green-50 text-green-800"
-            }`}
-          >
-            <p className="text-sm">{message}</p>
-          </div>
-        )}
+        </form>
       </div>
     </div>
   )
