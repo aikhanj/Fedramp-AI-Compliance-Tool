@@ -12,8 +12,7 @@ export default function LoginPage() {
           {/* Logo */}
           <div className="text-center">
             <h1 className="text-3xl font-light tracking-tight">
-              <span className="font-serif">Specter</span>
-              <span className="font-sans text-foreground">.Ai</span>
+              <span className="font-serif">Kamstif</span>
             </h1>
           </div>
 

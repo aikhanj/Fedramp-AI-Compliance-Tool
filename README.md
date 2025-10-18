@@ -1,30 +1,17 @@
-# Specter.Ai design
+# Kamstif stands for
 
-*Automatically synced with your [v0.app](https://v0.app) deployments*
+# Khan and Mason's startup that is fun!
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/aikhans-projects-1f0abbf2/v0-specter-ai-design)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.app-black?style=for-the-badge)](https://v0.app/chat/projects/PgglRvkzMHp)
+1. pnpm install to install the damn dependencies
 
-## Overview
+2. pnpm dev to run the dev server and go to localhost:3000
 
-This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
+quick monorepo with minimal infra mvp built in under an hour by khan j
 
-## Deployment
+basically, there are three endpoints
 
-Your project is live at:
+system, intake and generate. generate at the moment of coding 1:45 AM is a stub. I will connect a gpt-4o request later.
 
-**[https://vercel.com/aikhans-projects-1f0abbf2/v0-specter-ai-design](https://vercel.com/aikhans-projects-1f0abbf2/v0-specter-ai-design)**
+system and intake work. intake has a page.tsx with buttons for testing purposes.
 
-## Build your app
-
-Continue building your app on:
-
-**[https://v0.app/chat/projects/PgglRvkzMHp](https://v0.app/chat/projects/PgglRvkzMHp)**
-
-## How It Works
-
-1. Create and modify your project using [v0.app](https://v0.app)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+due to row-level security, endpoints are not exposed. so if ur tryna hack me then fuck off.

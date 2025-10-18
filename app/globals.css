@@ -4,14 +4,14 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Specter.Ai Enterprise Theme */
+  /* Kamstif Enterprise Theme */
   --background: #f9fafb; /* Compliance White */
   --foreground: #111827; /* Dark Navy */
   --card: #ffffff;
   --card-foreground: #111827;
   --popover: #ffffff;
   --popover-foreground: #111827;
-  --primary: #1f4e79; /* Specter Blue */
+  --primary: #1f4e79; /* Kamstif Blue */
   --primary-foreground: #ffffff;
   --secondary: #e5e7eb; /* Divider Gray */
   --secondary-foreground: #374151; /* Cool Gray */

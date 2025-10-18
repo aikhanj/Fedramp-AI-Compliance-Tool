@@ -235,7 +235,7 @@ export function IntakeForm() {
           disabled={isGenerating}
           className="gradient-primary text-white shadow-md hover:shadow-lg transition-all h-12 px-8 text-base font-medium"
         >
-          {isGenerating ? "Specter is reviewing your controls…" : "Generate SSP Draft"}
+          {isGenerating ? "Kamstif is reviewing your controls…" : "Generate SSP Draft"}
         </Button>
       </div>
     </form>

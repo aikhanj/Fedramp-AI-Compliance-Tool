@@ -7,8 +7,7 @@ export default function HistoryPage() {
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-6 py-4">
           <h1 className="text-xl font-light tracking-tight">
-            <span className="font-serif">Specter</span>
-            <span className="font-sans">.Ai</span>
+            <span className="font-serif">Kamstif</span>
           </h1>
         </div>
       </header>

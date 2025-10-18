@@ -15,7 +15,7 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Specter.Ai - FedRAMP Compliance Automation",
+  title: "Kamstif - FedRAMP Compliance Automation",
   description: "Automate your FedRAMP compliance, securely.",
   generator: "v0.app",
 }
