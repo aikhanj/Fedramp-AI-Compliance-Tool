@@ -1,140 +1,322 @@
-import { ResultsHeader } from "@/components/results-header"
+"use client"
+
+import { Suspense, useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { createClient } from "@/lib/supabase/browser"
+import { useUser } from "@/lib/supabase/client-hooks"
 import { ControlCard } from "@/components/control-card"
 import { Button } from "@/components/ui/button"
-import { Download } from "lucide-react"
+import { Card } from "@/components/ui/card"
+import { Download, Loader2, AlertCircle, ArrowLeft } from "lucide-react"
+import Link from "next/link"
 
-const controls = [
-  {
-    id: "AC-2",
-    title: "Account Management",
-    narrative:
-      "The organization manages information system accounts, including establishing, activating, modifying, reviewing, disabling, and removing accounts. Account management includes the identification of account types (individual, group, system, application, guest/anonymous, and temporary), establishment of conditions for group membership, and assignment of associated authorizations.",
-    evidence: [
-      "User provisioning workflow documentation",
-      "Access control policy document",
-      "Quarterly access review reports",
-      "Role-based access control (RBAC) matrix",
-    ],
-    status: "complete" as const,
-  },
-  {
-    id: "AC-17",
-    title: "Remote Access",
-    narrative:
-      "The organization establishes usage restrictions, configuration requirements, connection requirements, and implementation guidance for each type of remote access allowed. Remote access is access to organizational information systems by users (or processes acting on behalf of users) communicating through external networks.",
-    evidence: [
-      "VPN configuration documentation",
-      "Multi-factor authentication logs",
-      "Remote access policy",
-      "Endpoint security requirements",
-    ],
-    status: "complete" as const,
-  },
-  {
-    id: "AU-2",
-    title: "Audit Events",
-    narrative:
-      "The organization determines that the information system is capable of auditing specific events and coordinates the security audit function with other organizational entities requiring audit-related information. Auditable events include password changes, failed logons or failed accesses related to information systems, security policy changes, and system administrator or root-level access.",
-    evidence: [
-      "Audit logging configuration",
-      "SIEM integration documentation",
-      "Log retention policy",
-      "Audit event definitions",
-    ],
-    status: "needs-info" as const,
-  },
-  {
-    id: "SC-7",
-    title: "Boundary Protection",
-    narrative:
-      "The information system monitors and controls communications at the external boundary of the system and at key internal boundaries within the system. The organization implements subnetworks for publicly accessible system components that are physically or logically separated from internal organizational networks.",
-    evidence: [
-      "Network architecture diagram",
-      "Firewall rule documentation",
-      "DMZ configuration",
-      "Network segmentation policy",
-    ],
-    status: "complete" as const,
-  },
-  {
-    id: "SC-13",
-    title: "Cryptographic Protection",
-    narrative:
-      "The information system implements FIPS-validated or NSA-approved cryptography in accordance with applicable federal laws, Executive Orders, directives, policies, regulations, and standards. The organization employs cryptographic mechanisms to prevent unauthorized disclosure of information and detect changes to information during transmission.",
-    evidence: [
-      "Encryption standards documentation",
-      "TLS/SSL certificate inventory",
-      "Data-at-rest encryption configuration",
-      "Key management procedures",
-    ],
-    status: "complete" as const,
-  },
-  {
-    id: "IA-2",
-    title: "Identification and Authentication",
-    narrative:
-      "The information system uniquely identifies and authenticates organizational users (or processes acting on behalf of organizational users). The organization requires multi-factor authentication for network access to privileged accounts and for network access to non-privileged accounts.",
-    evidence: [
-      "Authentication mechanism documentation",
-      "MFA implementation guide",
-      "Password policy",
-      "Identity provider integration",
-    ],
-    status: "needs-info" as const,
-  },
-  {
-    id: "CP-9",
-    title: "Information System Backup",
-    narrative:
-      "The organization conducts backups of user-level information, system-level information, and information system documentation including security-related documentation. The organization protects the confidentiality, integrity, and availability of backup information at storage locations.",
-    evidence: [
-      "Backup and recovery procedures",
-      "Backup schedule documentation",
-      "Recovery time objective (RTO) analysis",
-      "Backup testing results",
-    ],
-    status: "missing" as const,
-  },
-  {
-    id: "IR-4",
-    title: "Incident Handling",
-    narrative:
-      "The organization implements an incident handling capability for security incidents that includes preparation, detection and analysis, containment, eradication, and recovery. The organization coordinates incident handling activities with contingency planning activities.",
-    evidence: [
-      "Incident response plan",
-      "Incident handling procedures",
-      "Security incident log",
-      "Post-incident review reports",
-    ],
-    status: "complete" as const,
-  },
-]
+interface Section {
+  id: string
+  control_id: string
+  narrative: string
+  evidence: string[]
+  citations: string[]
+}
 
-export default function ResultsPage() {
+interface Run {
+  id: string
+  status: string
+  error: string | null
+  created_at: string
+}
+
+interface System {
+  name: string
+  impact_level: string
+}
+
+function ResultsContent() {
+  const { user, loading: userLoading } = useUser()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const runId = searchParams.get("run_id")
+
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [run, setRun] = useState<Run | null>(null)
+  const [system, setSystem] = useState<System | null>(null)
+  const [sections, setSections] = useState<Section[]>([])
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!userLoading && !user) {
+      router.push("/")
+    }
+  }, [user, userLoading, router])
+
+  // Fetch data
+  useEffect(() => {
+    if (!runId || !user) return
+
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        setError("")
+
+        const supabase = createClient()
+
+        // Fetch run details
+        const { data: runData, error: runError } = await supabase
+          .from("runs")
+          .select("*")
+          .eq("id", runId)
+          .single()
+
+        if (runError || !runData) {
+          throw new Error("Run not found or access denied")
+        }
+
+        setRun(runData)
+
+        // Fetch system details
+        const { data: systemData, error: systemError } = await supabase
+          .from("systems")
+          .select("name, impact_level")
+          .eq("id", runData.system_id)
+          .single()
+
+        if (systemError || !systemData) {
+          throw new Error("System not found")
+        }
+
+        setSystem(systemData)
+
+        // Fetch sections for this run
+        const { data: sectionsData, error: sectionsError } = await supabase
+          .from("sections")
+          .select("*")
+          .eq("run_id", runId)
+          .order("control_id")
+
+        if (sectionsError) {
+          throw new Error("Failed to load sections")
+        }
+
+        setSections(sectionsData || [])
+      } catch (err) {
+        console.error("Error fetching results:", err)
+        setError(err instanceof Error ? err.message : "Failed to load results")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [runId, user])
+
+  if (userLoading || loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading results...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return null
+  }
+
+  // No run_id provided
+  if (!runId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="p-8 max-w-md text-center">
+          <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">No Results Selected</h2>
+          <p className="text-muted-foreground mb-6">
+            Please generate an SSP from the intake page first.
+          </p>
+          <Link href="/intake">
+            <Button className="gradient-primary text-white">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Go to Intake
+            </Button>
+          </Link>
+        </Card>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="p-8 max-w-md text-center border-destructive">
+          <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Error Loading Results</h2>
+          <p className="text-muted-foreground mb-6">{error}</p>
+          <div className="flex gap-3 justify-center">
+            <Link href="/intake">
+              <Button variant="outline">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Intake
+              </Button>
+            </Link>
+            <Button onClick={() => window.location.reload()}>
+              Try Again
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  // Run is still processing
+  if (run?.status === "running") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="p-8 max-w-md text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Generating SSP...</h2>
+          <p className="text-muted-foreground mb-4">
+            Kamstif is analyzing your controls and generating compliance documentation.
+            This may take a minute.
+          </p>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Refresh
+          </Button>
+        </Card>
+      </div>
+    )
+  }
+
+  // Run failed
+  if (run?.status === "failed") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="p-8 max-w-md text-center border-destructive">
+          <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Generation Failed</h2>
+          <p className="text-muted-foreground mb-2">
+            {run.error || "An error occurred during SSP generation"}
+          </p>
+          <p className="text-sm text-muted-foreground mb-6">
+            Please try generating again from the intake page.
+          </p>
+          <Link href="/intake">
+            <Button className="gradient-primary text-white">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Intake
+            </Button>
+          </Link>
+        </Card>
+      </div>
+    )
+  }
+
+  // Success - display results
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <ResultsHeader />
+      <header className="border-b border-border bg-card">
+        <div className="container mx-auto px-6 py-6">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-xl font-light tracking-tight">
+              <span className="font-serif">Kamstif</span>
+            </h1>
+            <Link href="/intake">
+              <Button variant="ghost" size="sm">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                New Generation
+              </Button>
+            </Link>
+          </div>
+          <div>
+            <h2 className="text-2xl font-semibold text-foreground mb-1">
+              FedRAMP SSP Draft — {system?.name}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Impact Level: <span className="capitalize">{system?.impact_level}</span> • Generated on{" "}
+              {new Date(run?.created_at || "").toLocaleDateString("en-US", {
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </p>
+          </div>
+        </div>
+      </header>
 
       {/* Main Content */}
       <div className="container mx-auto px-6 py-12">
-        <div className="grid md:grid-cols-2 gap-6">
-          {controls.map((control) => (
-            <ControlCard key={control.id} {...control} />
-          ))}
-        </div>
+        {sections.length === 0 ? (
+          <Card className="p-8 text-center">
+            <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No Sections Generated</h3>
+            <p className="text-muted-foreground">
+              No control sections were generated for this run.
+            </p>
+          </Card>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-6">
+            {sections.map((section) => (
+              <ControlCard
+                key={section.id}
+                id={section.control_id}
+                title={getControlTitle(section.control_id)}
+                narrative={section.narrative || "No narrative generated"}
+                evidence={section.evidence || []}
+                status="complete"
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Fixed Download Button */}
-      <div className="fixed bottom-8 right-8">
-        <Button
-          size="lg"
-          className="gradient-primary text-white shadow-xl hover:shadow-2xl transition-all h-14 px-8 text-base font-medium"
-        >
-          <Download className="mr-2 h-5 w-5" />
-          Download .docx
-        </Button>
-      </div>
+      {sections.length > 0 && (
+        <div className="fixed bottom-8 right-8">
+          <Button
+            size="lg"
+            className="gradient-primary text-white shadow-xl hover:shadow-2xl transition-all h-14 px-8 text-base font-medium"
+            onClick={() => alert("Download feature coming soon!")}
+          >
+            <Download className="mr-2 h-5 w-5" />
+            Download .docx
+          </Button>
+        </div>
+      )}
     </div>
+  )
+}
+
+// Helper function to get control titles
+function getControlTitle(controlId: string): string {
+  const controlTitles: Record<string, string> = {
+    "AC-2": "Account Management",
+    "AC-17": "Remote Access",
+    "AU-2": "Audit Events",
+    "SC-7": "Boundary Protection",
+    "SC-13": "Cryptographic Protection",
+    "IA-2": "Identification and Authentication",
+    "CP-9": "Information System Backup",
+    "IR-4": "Incident Handling",
+  }
+  return controlTitles[controlId] || controlId
+}
+
+// Main page component wrapped in Suspense
+export default function ResultsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading results...</p>
+        </div>
+      </div>
+    }>
+      <ResultsContent />
+    </Suspense>
   )
 }
