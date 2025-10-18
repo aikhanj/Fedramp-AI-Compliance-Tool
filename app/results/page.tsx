@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/browser"
 import { useUser } from "@/lib/supabase/client-hooks"
@@ -30,7 +30,7 @@ interface System {
   impact_level: string
 }
 
-export default function ResultsPage() {
+function ResultsContent() {
   const { user, loading: userLoading } = useUser()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -303,4 +303,20 @@ function getControlTitle(controlId: string): string {
     "IR-4": "Incident Handling",
   }
   return controlTitles[controlId] || controlId
+}
+
+// Main page component wrapped in Suspense
+export default function ResultsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading results...</p>
+        </div>
+      </div>
+    }>
+      <ResultsContent />
+    </Suspense>
+  )
 }
