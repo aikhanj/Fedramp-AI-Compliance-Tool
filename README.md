@@ -1,17 +1,68 @@
-# Kamstif stands for
+# Kamstif
 
-# Khan and Mason's startup that is fun!
+**Khan and Mason's startup that is fun!**
 
-1. pnpm install to install the damn dependencies
+FedRAMP compliance automation powered by AI. Generate System Security Plan (SSP) documents automatically using GPT-4o and Supabase.
 
-2. pnpm dev to run the dev server and go to localhost:3000
+## 🚀 Quick Start
 
-quick monorepo with minimal infra mvp built in under an hour by khan j
+1. **Install dependencies**
 
-basically, there are three endpoints
+   ```bash
+   pnpm install
+   ```
 
-system, intake and generate. generate at the moment of coding 1:45 AM is a stub. I will connect a gpt-4o request later.
+2. **Set up environment variables**
 
-system and intake work. intake has a page.tsx with buttons for testing purposes.
+   ```bash
+   # Copy the example file
+   cp .env.local.example .env.local
 
-due to row-level security, endpoints are not exposed. so if ur tryna hack me then fuck off.
+   # Add your keys (see ENV_SETUP.md for details)
+   ```
+
+3. **Run the dev server**
+
+   ```bash
+   pnpm dev
+   ```
+
+4. **Open your browser**
+   ```
+   http://localhost:3000
+   ```
+
+## 📚 Tech Stack
+
+- **Framework**: Next.js 15 (App Router)
+- **Language**: TypeScript
+- **Database & Auth**: Supabase
+- **AI**: OpenAI GPT-4o-mini
+- **Styling**: Tailwind CSS + shadcn/ui
+
+## 🔑 Environment Setup
+
+See [ENV_SETUP.md](./ENV_SETUP.md) for detailed instructions on:
+
+- Getting Supabase credentials
+- Getting OpenAI API key
+- Configuring auth redirects
+
+## 📖 API Endpoints
+
+- `POST /api/system` - Create a new system
+- `POST /api/intake` - Save intake data for a system
+- `POST /api/generate` - Generate FedRAMP SSP sections with AI
+
+## 🗄️ Database Schema
+
+Required Supabase tables:
+
+- `systems` - Store system information
+- `intake` - Store intake questionnaire data
+- `runs` - Track generation runs
+- `sections` - Store generated SSP sections
+
+---
+
+_MVP built with ❤️ by Khan J_
