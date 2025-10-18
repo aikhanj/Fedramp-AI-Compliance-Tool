@@ -1,8 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/browser"
+import { useUser } from "@/lib/supabase/client-hooks"
 
 export default function IntakePage() {
+  const { user, loading: userLoading } = useUser()
+  const router = useRouter()
   const [systemName, setSystemName] = useState("")
   const [impactLevel, setImpactLevel] = useState("low")
   const [systemId, setSystemId] = useState<string | null>(null)
@@ -10,6 +15,31 @@ export default function IntakePage() {
   const [runId, setRunId] = useState<string | null>(null)
   const [message, setMessage] = useState("")
   const [loading, setLoading] = useState(false)
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!userLoading && !user) {
+      router.push("/")
+    }
+  }, [user, userLoading, router])
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push("/")
+  }
+
+  if (userLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-600">Loading...</p>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return null
+  }
 
   const handleCreateSystem = async () => {
     if (!systemName) {
@@ -122,8 +152,23 @@ export default function IntakePage() {
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold mb-2">Kamstif API Test</h1>
-        <p className="text-gray-600 mb-8">Test the Supabase backend integration</p>
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Kamstif API Test</h1>
+            <p className="text-gray-600">Test the Supabase backend integration</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-gray-600 mb-2">
+              Logged in as: <strong>{user.email}</strong>
+            </p>
+            <button
+              onClick={handleLogout}
+              className="text-sm text-red-600 hover:text-red-700 underline"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
 
         {/* Create System */}
         <div className="bg-white p-6 rounded-lg shadow mb-6">
